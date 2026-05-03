@@ -1,8 +1,4 @@
-import os
-import json
-import logging
-import requests
-from flask import Flask, request
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
