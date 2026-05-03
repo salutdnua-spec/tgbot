@@ -1,8 +1,8 @@
 import os
-import json
 import logging
 import smtplib
 import requests
+import threading
 from flask import Flask, request
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -20,7 +20,10 @@ TG_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 app = Flask(__name__)
 
 def tg_send(chat_id, text):
-    requests.post(f"{TG_API}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=10)
+    try:
+        requests.post(f"{TG_API}/sendMessage", json={"chat_id": chat_id, "text": text}, timeout=10)
+    except Exception as e:
+        log.error(f"tg_send error: {e}")
 
 def tg_get_file_url(file_id):
     r = requests.get(f"{TG_API}/getFile", params={"file_id": file_id}, timeout=10)
@@ -46,6 +49,26 @@ def send_email(text):
         srv.login(SMTP_USER, SMTP_PASSWORD)
         srv.sendmail(SMTP_USER, EMAIL_TO, msg.as_string())
 
+def process_voice(chat_id, file_id):
+    try:
+        log.info(f"Получаем файл {file_id}")
+        file_url = tg_get_file_url(file_id)
+        log.info(f"Скачиваем аудио...")
+        audio_bytes = requests.get(file_url, timeout=30).content
+        log.info(f"Скачано {len(audio_bytes)} байт, транскрибируем...")
+        text = transcribe_with_groq(audio_bytes)
+        log.info(f"Транскрипция готова: {text[:50]}")
+        if not text:
+            tg_send(chat_id, "Не удалось распознать текст.")
+            return
+        log.info("Отправляем email...")
+        send_email(text)
+        log.info("Email отправлен!")
+        tg_send(chat_id, f"Готово! Письмо отправлено.\n\nТекст:\n{text}")
+    except Exception as e:
+        log.error(f"Ошибка обработки: {e}", exc_info=True)
+        tg_send(chat_id, f"Ошибка: {e}")
+
 def handle_update(update):
     message = update.get("message") or update.get("channel_post")
     if not message:
@@ -56,30 +79,17 @@ def handle_update(update):
         tg_send(chat_id, "Привет! Отправь голосовое сообщение.")
         return
     tg_send(chat_id, "Получил! Транскрибирую...")
-    try:
-        log.info("Получаем ссылку на файл...")
-        file_url = tg_get_file_url(voice["file_id"])
-        log.info(f"Скачиваем аудио: {file_url}")
-        audio_bytes = requests.get(file_url, timeout=30).content
-        log.info(f"Скачано {len(audio_bytes)} байт, транскрибируем...")
-        text = transcribe_with_groq(audio_bytes)
-        log.info(f"Транскрипция: {text}")
-        if not text:
-            tg_send(chat_id, "Не удалось распознать текст.")
-            return
-        log.info("Отправляем email...")
-        send_email(text)
-        log.info("Email отправлен!")
-        tg_send(chat_id, f"Готово! Письмо отправлено.\n\nТекст:\n{text}")
-    except Exception as e:
-        log.error(f"Ошибка: {e}", exc_info=True)
-        tg_send(chat_id, f"Ошибка: {e}")
+    # Запускаем обработку в отдельном потоке
+    t = threading.Thread(target=process_voice, args=(chat_id, voice["file_id"]))
+    t.daemon = True
+    t.start()
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = request.get_json()
     if update:
         handle_update(update)
-    return "OK", 200
+    return "OK", 200  # Отвечаем Telegram сразу
 
 @app.route("/")
 def index():
