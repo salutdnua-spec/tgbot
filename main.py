@@ -1,11 +1,16 @@
+import os
+import json
+import logging
 import smtplib
+import requests
+from flask import Flask, request
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-EMAIL_FROM = "onboarding@resend.dev"
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 EMAIL_TO = "kitay@sync.mylifeorganized.net"
 
 logging.basicConfig(level=logging.INFO)
