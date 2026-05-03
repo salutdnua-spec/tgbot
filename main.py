@@ -36,20 +36,14 @@ def transcribe_with_groq(audio_bytes):
     return r.text.strip()
 
 def send_email(text):
-    r = requests.post("https://api.resend.com/emails",
-        headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "from": EMAIL_FROM,
-            "to": EMAIL_TO,
-            "subject": "Голосовое сообщение — транскрипция",
-            "text": text
-        },
-        timeout=10)
-    r.raise_for_status()
-    log.info(f"Письмо отправлено: {r.json()}")
+    msg = MIMEMultipart()
+    msg["From"] = SMTP_USER
+    msg["To"] = EMAIL_TO
+    msg["Subject"] = "Голосовое сообщение — транскрипция"
+    msg.attach(MIMEText(text, "plain", "utf-8"))
+    with smtplib.SMTP_SSL("smtp.yandex.ru", 465) as srv:
+        srv.login(SMTP_USER, SMTP_PASSWORD)
+        srv.sendmail(SMTP_USER, EMAIL_TO, msg.as_string())
 
 def handle_update(update):
     message = update.get("message") or update.get("channel_post")
