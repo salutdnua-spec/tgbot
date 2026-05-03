@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-import smtplib
 import requests
 from flask import Flask, request
 from email.mime.text import MIMEText
@@ -9,10 +8,8 @@ from email.mime.multipart import MIMEMultipart
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = "onboarding@resend.dev"
 EMAIL_TO = "kitay@sync.mylifeorganized.net"
 
 logging.basicConfig(level=logging.INFO)
@@ -39,14 +36,20 @@ def transcribe_with_groq(audio_bytes):
     return r.text.strip()
 
 def send_email(text):
-    msg = MIMEMultipart()
-    msg["From"] = SMTP_USER
-    msg["To"] = EMAIL_TO
-    msg["Subject"] = "Голосовое сообщение — транскрипция"
-    msg.attach(MIMEText(text, "plain", "utf-8"))
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as srv:
-        srv.login(SMTP_USER, SMTP_PASSWORD)
-        srv.sendmail(SMTP_USER, EMAIL_TO, msg.as_string())
+    r = requests.post("https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "from": EMAIL_FROM,
+            "to": EMAIL_TO,
+            "subject": "Голосовое сообщение — транскрипция",
+            "text": text
+        },
+        timeout=10)
+    r.raise_for_status()
+    log.info(f"Письмо отправлено: {r.json()}")
 
 def handle_update(update):
     message = update.get("message") or update.get("channel_post")
