@@ -57,17 +57,23 @@ def handle_update(update):
         return
     tg_send(chat_id, "Получил! Транскрибирую...")
     try:
-        audio_bytes = requests.get(tg_get_file_url(voice["file_id"]), timeout=30).content
+        log.info("Получаем ссылку на файл...")
+        file_url = tg_get_file_url(voice["file_id"])
+        log.info(f"Скачиваем аудио: {file_url}")
+        audio_bytes = requests.get(file_url, timeout=30).content
+        log.info(f"Скачано {len(audio_bytes)} байт, транскрибируем...")
         text = transcribe_with_groq(audio_bytes)
+        log.info(f"Транскрипция: {text}")
         if not text:
             tg_send(chat_id, "Не удалось распознать текст.")
             return
+        log.info("Отправляем email...")
         send_email(text)
+        log.info("Email отправлен!")
         tg_send(chat_id, f"Готово! Письмо отправлено.\n\nТекст:\n{text}")
     except Exception as e:
         log.error(f"Ошибка: {e}", exc_info=True)
         tg_send(chat_id, f"Ошибка: {e}")
-
 @app.route("/webhook", methods=["POST"])
 def webhook():
     update = request.get_json()
