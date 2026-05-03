@@ -44,9 +44,7 @@ def send_email(text):
     msg["To"] = EMAIL_TO
     msg["Subject"] = "Голосовое сообщение — транскрипция"
     msg.attach(MIMEText(text, "plain", "utf-8"))
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as srv:
-        srv.ehlo()
-        srv.starttls()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as srv:
         srv.login(SMTP_USER, SMTP_PASSWORD)
         srv.sendmail(SMTP_USER, EMAIL_TO, msg.as_string())
 
